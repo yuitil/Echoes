@@ -44,10 +44,10 @@ Source/
 
 | クラス | 内容 |
 | --- | --- |
-| [ActionCharacter](Source/Player/ActionCharacter.h) | プレイヤー本体。入力の受け取り、カメラ制御、各コンポーネントへの命令。HP・回復・被弾リアクション・死亡とリスポーン時の状態リセット。エネルギー管理と UI への通知。ジャスト回避通知の受け取り、重力の異常を監視して自動で戻す処理 |
-| [ActionMovementComponent](Source/Player/ActionMovementComponent.h) | 移動・オートダッシュ・二段ジャンプ・空中制御・着地硬直（イージングによる速度回復）。回避中や空中での技の間の重力・摩擦の制御 |
-| [CombatComponent](Source/Player/CombatComponent.h) / [ComboDataAsset](Source/Player/ComboDataAsset.h) | 攻撃コンボ（コンボウィンドウと先行入力）、回避、回避による攻撃キャンセル。当たり判定、ヒットストップ、ヒット音 |
-| [LockOnComponent](Source/Player/LockOnComponent.h) | ロックオンと、内積を用いたターゲットの切り替え |
-| [SkillComponent](Source/Player/SkillComponent.h) / [SkillDataAsset](Source/Player/SkillDataAsset.h) | エネルギーを消費するゲージ技3種（一閃・テンペスト・エクスカリバー）。調整値はデータアセットに分離。技の最中のカメラ演出と画面の揺れ |
-| [JustDodgeComponent](Source/Player/JustDodgeComponent.h) | ジャスト回避の演出（全体スロー・画面の彩度変化）と報酬（一定時間エネルギー2倍） |
+| [ActionCharacter](Player/ActionCharacter.h) | プレイヤー本体。入力の受け取り、カメラ制御、各コンポーネントへの命令。HP・回復・被弾リアクション・死亡とリスポーン時の状態リセット。エネルギー管理と UI への通知。ジャスト回避通知の受け取り、重力の異常を監視して自動で戻す処理 |
+| [ActionMovementComponent](Player/ActionMovementComponent.h) | 移動・オートダッシュ・二段ジャンプ・空中制御・着地硬直（イージングによる速度回復）。回避中や空中での技の間の重力・摩擦の制御 |
+| [CombatComponent](Player/CombatComponent.h) / [ComboDataAsset](Player/ComboDataAsset.h) | 攻撃コンボ（コンボウィンドウと先行入力）、回避、回避による攻撃キャンセル。当たり判定、ヒットストップ、ヒット音 |
+| [LockOnComponent](Player/LockOnComponent.h) | ロックオンと、内積を用いたターゲットの切り替え |
+| [SkillComponent](Player/SkillComponent.h) / [SkillDataAsset](Player/SkillDataAsset.h) | エネルギーを消費するゲージ技3種（一閃・テンペスト・エクスカリバー）。調整値はデータアセットに分離。技の最中のカメラ演出と画面の揺れ |
+| [JustDodgeComponent](Player/JustDodgeComponent.h) | ジャスト回避の演出（全体スロー・画面の彩度変化）と報酬（一定時間エネルギー2倍） |
 |
