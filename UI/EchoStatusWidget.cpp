@@ -1,0 +1,296 @@
+﻿//EchoStatusWidget.cpp
+
+#include "UI/EchoStatusWidget.h"
+#include "Player/ActionCharacter.h"
+#include "Components/ProgressBar.h"
+#include "Components/TextBlock.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
+#include "Blueprint/WidgetTree.h"
+#include "Engine/Texture2D.h"
+
+void UEchoStatusWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	TryBindPlayer();
+}
+
+void UEchoStatusWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	//生成時にプレイヤーがまだいなかった場合だけ、見つかるまで再試行する
+	if (!Player.IsValid())
+	{
+		TryBindPlayer();
+		return;
+	}
+
+	//回復瓶：使えない間は色を変える／使った瞬間に少し膨らむ
+	UpdateHeal(InDeltaTime);
+
+	//被弾したときの赤い光と揺れ
+	UpdateDamageFeedback(InDeltaTime);
+
+	//HPバー、減った分の帯を、少し遅れて追いかけさせる
+	if (m_TrailRatio > m_HPRatio)
+	{
+		if (m_TrailWaitTime > 0.f)
+		{
+			m_TrailWaitTime -= InDeltaTime;
+		}
+		else
+		{
+			m_TrailRatio = FMath::Max(m_HPRatio, m_TrailRatio - m_TrailSpeed * InDeltaTime);
+		}
+		if (HPTrailBar) HPTrailBar->SetPercent(ToHPBarPercent(m_TrailRatio));
+	}
+
+	//点滅：切り替わる瞬間だけテクスチャを更新する（毎フレーム更新しない）
+	if (m_BlinkInterval > 0.f && GetWorld())
+	{
+		const float Time = GetWorld()->GetTimeSeconds();
+		const bool bOn = FMath::Fmod(Time, m_BlinkInterval * 2.f) < m_BlinkInterval;
+		if (bOn != m_bBlinkOn)
+		{
+			m_bBlinkOn = bOn;
+			if (m_CachedStates.Contains(EGhostLifecycleState::Warning))
+			{
+				ApplyCapsuleTextures();
+			}
+		}
+	}
+}
+
+void UEchoStatusWidget::NativeDestruct()
+{
+	if (AActionCharacter* P = Player.Get())
+	{
+		P->OnEnergyChanged.Remove(m_EnergyHandle);
+		P->OnGhostsChanged.Remove(m_GhostsHandle);
+		P->OnHPChanged.Remove(m_HPHandle);
+		P->OnHealCountChanged.Remove(m_HealCountHandle);
+	}
+	Super::NativeDestruct();
+}
+
+bool UEchoStatusWidget::TryBindPlayer()
+{
+	AActionCharacter* P = Cast<AActionCharacter>(GetOwningPlayerPawn());
+	if (!P) return false;
+
+	Player = P;
+	m_EnergyHandle = P->OnEnergyChanged.AddUObject(this, &UEchoStatusWidget::HandleEnergyChanged);
+	m_GhostsHandle = P->OnGhostsChanged.AddUObject(this, &UEchoStatusWidget::HandleGhostsChanged);
+	m_HPHandle = P->OnHPChanged.AddUObject(this, &UEchoStatusWidget::HandleHPChanged);
+	m_HealCountHandle = P->OnHealCountChanged.AddUObject(this, &UEchoStatusWidget::HandleHealCountChanged);
+
+	BuildCapsules(P->GetMaxGhostCount());
+
+	//初期表示
+	HandleEnergyChanged(P->GetCurrentEnergy(), P->GetMaxEnergy());
+	HandleGhostsChanged();
+	HandleHPChanged(P->GetCurrentHP(), P->GetMaxHP());
+	HandleHealCountChanged(P->GetHealCount(), P->GetMaxHealCount());
+	return true;
+}
+
+void UEchoStatusWidget::BuildCapsules(int32 Count)
+{
+	if (!CapsuleBox) return;
+
+	CapsuleBox->ClearChildren();
+	CapsuleImages.Reset();
+
+	//最大召喚数ぶんカプセルを並べる
+	for (int32 i = 0; i < Count; ++i)
+	{
+		UImage* Img = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		Img->SetDesiredSizeOverride(m_CapsuleSize);
+
+		if (UHorizontalBoxSlot* BoxSlot = CapsuleBox->AddChildToHorizontalBox(Img))
+		{
+			BoxSlot->SetPadding(FMargin(0.f, 0.f, m_CapsuleSpacing, 0.f));
+			BoxSlot->SetVerticalAlignment(VAlign_Center);
+		}
+		CapsuleImages.Add(Img);
+	}
+}
+
+void UEchoStatusWidget::HandleEnergyChanged(float Current, float Max)
+{
+	if (!Player.IsValid()) return;
+
+	const float PerStock = Player->GetEnergyPerStock();
+	const int32 MaxStock = Player->GetMaxEnergyStock();
+	const int32 Stock = Player->GetEnergyStock();
+
+	//今の1本の溜まり具合（最大ストック時は満タンのまま止める）
+	float Ratio = 1.f;
+	if (Stock < MaxStock && PerStock > 0.f)
+	{
+		Ratio = FMath::Clamp((Current - Stock * PerStock) / PerStock, 0.f, 1.f);
+	}
+
+	//画像の左の四角ぶんをずらして、中身の部分だけが0→100%になるように変換
+	if (EnergyBar)
+	{
+		const float TotalMax = PerStock * MaxStock;
+		const float Total = TotalMax > 0.f ? FMath::Clamp(Current / TotalMax, 0.f, 1.f) : 0.f;
+		EnergyBar->SetPercent(FMath::Lerp(m_BarStartRatio, m_BarEndRatio, Total));
+	}
+}
+
+void UEchoStatusWidget::HandleGhostsChanged()
+{
+	if (!Player.IsValid()) return;
+
+	//分身の状態を保存して、カプセルの見た目を更新（色の決め方は GetCapsuleTexture にまとめてある）
+	Player->GetGhostStates(m_CachedStates);
+	ApplyCapsuleTextures();
+}
+
+UTexture2D* UEchoStatusWidget::GetCapsuleTexture(int32 Index) const
+{
+	//分身がいない枠はグレー
+	if (!m_CachedStates.IsValidIndex(Index)) return CapsuleEmptyTexture;
+
+	switch (m_CachedStates[Index])
+	{
+	case EGhostLifecycleState::Warning:
+		//消える直前：青とグレーを交互に
+		return m_bBlinkOn ? CapsuleActiveTexture : CapsuleEmptyTexture;
+
+	case EGhostLifecycleState::Corrupted:
+	case EGhostLifecycleState::Enemy:
+		//敵化した分身は赤
+		return CapsuleEnemyTexture ? CapsuleEnemyTexture : CapsuleActiveTexture;
+
+	case EGhostLifecycleState::Dead:
+		return CapsuleEmptyTexture;
+
+	default:
+		//通常（Friendly）は青
+		return CapsuleActiveTexture;
+	}
+}
+
+void UEchoStatusWidget::ApplyCapsuleTextures()
+{
+	for (int32 i = 0; i < CapsuleImages.Num(); ++i)
+	{
+		if (UTexture2D* Tex = GetCapsuleTexture(i))
+		{
+			CapsuleImages[i]->SetBrushFromTexture(Tex, false);
+		}
+	}
+}
+
+void UEchoStatusWidget::HandleHPChanged(float Current, float Max)
+{
+	const float NewRatio = Max > 0.f ? FMath::Clamp(Current / Max, 0.f, 1.f) : 0.f;
+
+	if (NewRatio < m_HPRatio)
+	{
+		//減ったときは少し待ってから帯を追いかけさせる
+		m_TrailWaitTime = m_TrailDelay;
+
+		//赤く光らせて揺らす（減った量が大きいほど強く揺れる）
+		const float Damage = m_HPRatio - NewRatio;
+		m_FlashRemain = m_HPFlashTime;
+		m_ShakeRemain = m_ShakeTime;
+		m_ShakeStrength = FMath::Lerp(m_ShakeMin, m_ShakeMax,
+			FMath::Clamp(Damage / m_ShakeFullDamage, 0.f, 1.f));
+	}
+
+	//回復したときは帯もすぐ合わせる
+	m_TrailRatio = FMath::Max(m_TrailRatio, NewRatio);
+	m_HPRatio = NewRatio;
+
+	if (HPBar)      HPBar->SetPercent(ToHPBarPercent(m_HPRatio));
+	if (HPTrailBar) HPTrailBar->SetPercent(ToHPBarPercent(m_TrailRatio));
+	if (HPFlashBar) HPFlashBar->SetPercent(ToHPBarPercent(m_HPRatio));
+}
+
+void UEchoStatusWidget::HandleHealCountChanged(int32 Count, int32 Max)
+{
+	if (HealCountText)
+	{
+		HealCountText->SetText(FText::AsNumber(Count));
+	}
+
+	//減ったときだけ膨らませる（最初の表示や、リスポーンで補充したときは膨らませない）
+	if (m_HealCount >= 0 && Count < m_HealCount)
+	{
+		m_HealScale = m_HealPopScale;
+	}
+	m_HealCount = Count;
+}
+
+void UEchoStatusWidget::UpdateHeal(float DeltaTime)
+{
+	AActionCharacter* P = Player.Get();
+	if (!P) return;
+
+	//残り0 → 薄く／回復動作中 → 暗く／それ以外 → 通常
+	FLinearColor Color = m_HealReadyColor;
+	if (P->GetHealCount() <= 0)  Color = m_HealEmptyColor;
+	else if (P->IsHealing())     Color = m_HealBusyColor;
+
+	if (HealCircle)    HealCircle->SetColorAndOpacity(Color);
+	if (HealArrow)     HealArrow->SetColorAndOpacity(Color);
+	if (HealIcon)      HealIcon->SetColorAndOpacity(Color);
+	if (HealCountText) HealCountText->SetColorAndOpacity(FSlateColor(Color));
+
+	//膨らんだ大きさを1に戻していく
+	m_HealScale = FMath::FInterpTo(m_HealScale, 1.f, DeltaTime, 12.f);
+	if (HealRoot) HealRoot->SetRenderScale(FVector2D(m_HealScale));
+}
+
+void UEchoStatusWidget::UpdateDamageFeedback(float DeltaTime)
+{
+	// --- 赤く光る：一瞬で光って、だんだん消える ---
+	if (HPFlashBar)
+	{
+		m_FlashRemain = FMath::Max(0.f, m_FlashRemain - DeltaTime);
+		const float Alpha = (m_HPFlashTime > 0.f) ? m_FlashRemain / m_HPFlashTime : 0.f;
+
+		FLinearColor Color = m_HPFlashColor;
+		Color.A *= Alpha;
+		HPFlashBar->SetFillColorAndOpacity(Color);
+	}
+
+	// --- 揺れ：ランダムにずらして、だんだん小さくする ---
+	if (HPRoot)
+	{
+		if (m_ShakeRemain > 0.f)
+		{
+			m_ShakeRemain = FMath::Max(0.f, m_ShakeRemain - DeltaTime);
+			const float Power = m_ShakeStrength * ((m_ShakeTime > 0.f) ? m_ShakeRemain / m_ShakeTime : 0.f);
+			HPRoot->SetRenderTranslation(FVector2D(
+				FMath::FRandRange(-Power, Power),
+				FMath::FRandRange(-Power, Power)));
+		}
+		else
+		{
+			HPRoot->SetRenderTranslation(FVector2D::ZeroVector);
+		}
+	}
+
+	// --- HPが少ないとき：画面の端を赤く、ゆっくり脈打たせる ---
+	if (LowHPVignette)
+	{
+		float Target = 0.f;
+		if (m_HPRatio > 0.f && m_HPRatio < m_LowHPThreshold)
+		{
+			//少ないほど濃く（しきい値ちょうどで3分の1、0に近いと最大）
+			const float Danger = 1.f - m_HPRatio / m_LowHPThreshold;
+			const float Time = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f;
+			const float Pulse = 0.75f + 0.25f * FMath::Sin(Time * m_LowHPPulseSpeed * 2.f * PI);
+			Target = FMath::Lerp(0.35f, 1.f, Danger) * m_LowHPMaxOpacity * Pulse;
+		}
+		m_VignetteOpacity = FMath::FInterpTo(m_VignetteOpacity, Target, DeltaTime, 4.f);
+		LowHPVignette->SetRenderOpacity(m_VignetteOpacity);
+	}
+}
