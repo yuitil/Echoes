@@ -1,1 +1,53 @@
-# Echoes
+# Echoes（エコーズ）
+
+「分身」を呼び出し、共に戦うスタイリッシュ 3D アクションゲームです。
+このリポジトリには、チーム制作のうち **中里 優太が担当したプレイヤー制御と UI の C++ ソースコード** を掲載しています。
+
+🎬 プレイ動画：https://youtu.be/z92gqHkPjhk
+
+| 項目 | 内容 |
+| --- | --- |
+| ジャンル | スタイリッシュ 3D アクション |
+| 使用ツール・言語 | Unreal Engine 5.7 / C++ |
+| 制作期間 | 2026年5月・8月・10月〜11月（現在も開発中） |
+| 制作人数 | 4名（プログラマー3名 / デザイナー1名） |
+| 担当範囲 | プレイヤー制御全般、ゲージ技、ジャスト回避、UI |
+
+---
+
+## ゲーム紹介
+
+敵に攻撃を当てるとエネルギーが溜まり、**分身の召喚**や強力な**ゲージ技**に使えます。
+分身は数的有利を生み出す強力な味方ですが、時間が経つと消えてしまいます。
+
+エネルギーを分身に使うか技に使うか、分身をどう管理するか。
+有利な状況を作り続けることが、このゲームの核となる駆け引きです。
+
+---
+
+## フォルダ構成
+
+```
+Source/
+├─ Player/   プレイヤーの各機能（コンポーネント）
+└─ UI/       HUD・ステータス表示・ボタンガイド
+```
+
+> 実際のプロジェクトでは Unreal Engine の標準どおり `Public/`（.h）と `Private/`（.cpp）に分けています。
+> ここでは読みやすさのため、.h と .cpp を同じフォルダに並べています。
+
+---
+
+## 担当したプログラム
+
+### プレイヤー（`Source/Player/`）
+
+| クラス | 内容 |
+| --- | --- |
+| [ActionCharacter](Source/Player/ActionCharacter.h) | プレイヤー本体。入力の受け取り、カメラ制御、各コンポーネントへの命令。HP・回復・被弾リアクション・死亡とリスポーン時の状態リセット。エネルギー管理と UI への通知。ジャスト回避通知の受け取り、重力の異常を監視して自動で戻す処理 |
+| [ActionMovementComponent](Source/Player/ActionMovementComponent.h) | 移動・オートダッシュ・二段ジャンプ・空中制御・着地硬直（イージングによる速度回復）。回避中や空中での技の間の重力・摩擦の制御 |
+| [CombatComponent](Source/Player/CombatComponent.h) / [ComboDataAsset](Source/Player/ComboDataAsset.h) | 攻撃コンボ（コンボウィンドウと先行入力）、回避、回避による攻撃キャンセル。当たり判定、ヒットストップ、ヒット音 |
+| [LockOnComponent](Source/Player/LockOnComponent.h) | ロックオンと、内積を用いたターゲットの切り替え |
+| [SkillComponent](Source/Player/SkillComponent.h) / [SkillDataAsset](Source/Player/SkillDataAsset.h) | エネルギーを消費するゲージ技3種（一閃・テンペスト・エクスカリバー）。調整値はデータアセットに分離。技の最中のカメラ演出と画面の揺れ |
+| [JustDodgeComponent](Source/Player/JustDodgeComponent.h) | ジャスト回避の演出（全体スロー・画面の彩度変化）と報酬（一定時間エネルギー2倍） |
+|
