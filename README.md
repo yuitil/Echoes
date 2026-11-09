@@ -5,6 +5,9 @@
 
 🎬 プレイ動画：https://youtu.be/z92gqHkPjhk
 
+🎮 ゲームのダウンロード（Windows）：https://drive.google.com/drive/folders/1aakYY7uh3LtfY4ta9syRPcU0edkJ5XFC?usp=drive_link
+　zip をダウンロード・解凍し、フォルダ内の Echoes.exe を起動してください。操作方法は同梱の「操作方法.txt」をご覧ください。
+
 | 項目 | 内容 |
 | --- | --- |
 | ジャンル | スタイリッシュ 3D アクション |
@@ -28,9 +31,8 @@
 ## フォルダ構成
 
 ```
-Source/
-├─ Player/   プレイヤーの各機能（コンポーネント）
-└─ UI/       HUD・ステータス表示・ボタンガイド
+Player/   プレイヤーの各機能（コンポーネント）
+UI/       HUD・ステータス表示・ボタンガイド
 ```
 
 > 実際のプロジェクトでは Unreal Engine の標準どおり `Public/`（.h）と `Private/`（.cpp）に分けています。
@@ -40,7 +42,7 @@ Source/
 
 ## 担当したプログラム
 
-### プレイヤー（`Source/Player/`）
+### プレイヤー（`Player/`）
 
 | クラス | 内容 |
 | --- | --- |
@@ -50,4 +52,27 @@ Source/
 | [LockOnComponent](Player/LockOnComponent.h) | ロックオンと、内積を用いたターゲットの切り替え |
 | [SkillComponent](Player/SkillComponent.h) / [SkillDataAsset](Player/SkillDataAsset.h) | エネルギーを消費するゲージ技3種（一閃・テンペスト・エクスカリバー）。調整値はデータアセットに分離。技の最中のカメラ演出と画面の揺れ |
 | [JustDodgeComponent](Player/JustDodgeComponent.h) | ジャスト回避の演出（全体スロー・画面の彩度変化）と報酬（一定時間エネルギー2倍） |
+| [GhostRecorderComponent](Player/GhostRecorderComponent.h) | 分身用に、プレイヤーの行動を記録する処理 |
+
+### UI（`UI/`）
+
+| クラス | 内容 |
+| --- | --- |
+| [EchoHUD](UI/EchoHUD.h) | ステータス UI の生成と、ロックオンマーカーの描画（距離に応じて大きさを変える） |
+| [EchoStatusWidget](UI/EchoStatusWidget.h) | HP ゲージ（被弾時の赤い光・揺れ・減った分を追いかけるゲージ）、HP が少ないときの画面端の赤。エネルギーゲージ、分身の状態を表すカプセル、回復の残り回数 |
+| [EchoButtonGuideWidget](UI/EchoButtonGuideWidget.h) | ボタンガイド。押したボタンの拡大縮小、二段ジャンプの表示切り替え、召喚に必要なエネルギーまで溜まっていく表示、技の消費エネルギーの表示 |
+
+---
+
+## 技術的なこだわり
+
+### 1. 責務を分けたコンポーネント設計
+
+プレイヤーの機能を役割ごとのコンポーネントに分割しています。
+
+| クラス | 役割 |
+| --- | --- |
+| ActionCharacter | 入力・カメラ・各コンポーネントへの命令 |
+| ActionMovementComponent | 移動・物理挙動 |
+| CombatComponent | 攻撃・回避などの戦闘アクション |
 |
